@@ -1,0 +1,105 @@
+#define BLYNK_TEMPLATE_ID ""
+#define BLYNK_TEMPLATE_NAME ""
+#define BLYNK_AUTH_TOKEN ""
+
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <Servo.h>
+
+// Định nghĩa chân relay, nút nhấn, và servo
+#define RELAY_PIN1 D1 // Relay 1 - Bật/tắt đèn
+#define RELAY_PIN2 D3 // Relay 2 - Bật/tắt bơm nước
+#define BUTTON_PIN1 D2 // Nút nhấn cho Relay 1
+#define SERVO_PIN D5   // Chân điều khiển servo
+
+// Thông tin Blynk và WiFi
+char auth[] = "";
+char ssid[] = "";
+char pass[] = "";
+
+// Trạng thái relay
+boolean relayState1 = HIGH; // Relay 1 ban đầu tắt
+boolean relayState2 = HIGH; // Relay 2 ban đầu tắt
+
+// Servo
+Servo sg90;
+bool motorActive = false;
+
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(RELAY_PIN1, OUTPUT);
+  pinMode(RELAY_PIN2, OUTPUT);
+  pinMode(BUTTON_PIN1, INPUT_PULLUP);
+
+  // Kết nối Blynk
+  Blynk.begin(auth, ssid, pass);
+
+  // Tắt các relay ban đầu
+  digitalWrite(RELAY_PIN1, relayState1);
+  digitalWrite(RELAY_PIN2, relayState2);
+  Blynk.virtualWrite(V2, relayState1);
+  Blynk.virtualWrite(V3, relayState2);
+
+  // Khởi tạo servo
+  sg90.attach(SERVO_PIN);
+  sg90.write(90); // Đặt servo về trung lập
+}
+
+void loop()
+{
+  Blynk.run();
+  check_button();
+  
+  if (motorActive) {
+    // Quay servo từ 0 đến 180°
+    for (int pos = 0; pos <= 180; pos += 1) {
+      sg90.write(pos);
+      delay(10);
+    }
+    motorActive = false; // Dừng servo sau một chu kỳ
+    sg90.write(90);      // Đặt servo về vị trí trung lập
+  }
+}
+
+// Kiểm tra nút nhấn Relay 1
+void check_button()
+{
+  static boolean lastButtonState = HIGH;
+  boolean currentButtonState = digitalRead(BUTTON_PIN1);
+
+  if (currentButtonState == LOW && lastButtonState == HIGH)
+  {
+    delay(50);
+    if (digitalRead(BUTTON_PIN1) == LOW)
+    {
+      relayState1 = !relayState1;
+      digitalWrite(RELAY_PIN1, relayState1);
+      Blynk.virtualWrite(V2, relayState1);
+    }
+  }
+  lastButtonState = currentButtonState;
+}
+
+// Điều khiển Relay 1 từ Blynk (đèn)
+BLYNK_WRITE(V2)
+{
+  relayState1 = param.asInt() == 1 ? LOW : HIGH;
+  digitalWrite(RELAY_PIN1, relayState1);
+}
+
+// Điều khiển Relay 2 từ Blynk (bơm nước)
+BLYNK_WRITE(V3)
+{
+  relayState2 = param.asInt() == 1 ? LOW : HIGH;
+  digitalWrite(RELAY_PIN2, relayState2);
+}
+
+// Điều khiển Servo từ Blynk
+BLYNK_WRITE(V1)
+{
+  int buttonState = param.asInt();
+  if (buttonState == 1) {
+    motorActive = true; // Kích hoạt servo khi nhấn nút trên Blynk
+  }
+}
